@@ -122,15 +122,16 @@ void Backlash::add_correction_steps(const int32_t &da, const int32_t &db, const 
       // Don't correct backlash in the opposite direction to movement on this axis and for accuracy in
       // updating block->millimeters, don't add too many steps to the movement on this axis
       if (!reverse)
-        LIMIT(error_correction, 0, dist[axis]);
+        error_correction = _MAX(error_correction, 0);
       else
-        LIMIT(error_correction, dist[axis], 0);
+        error_correction = _MIN(error_correction, 0);
       
       // This correction reduces the residual error and adds block steps
+      millimeters_delta += sq((dist[axis] + error_correction) * planner.mm_per_step[axis]);
       if (error_correction) {
         changed = true;
         block->steps[axis] += ABS(error_correction);
-        millimeters_delta += dist[axis] * error_correction * sq(planner.mm_per_step[axis]);
+        //millimeters_delta += dist[axis] * error_correction * sq(planner.mm_per_step[axis]);
         #if ENABLED(CORE_BACKLASH)
           switch (axis) {
             case CORE_AXIS_1:
@@ -155,7 +156,8 @@ void Backlash::add_correction_steps(const int32_t &da, const int32_t &db, const 
 
   // if backlash correction steps were added, modify block->millimeters with a linear approximation
   if (changed)
-    block->millimeters += millimeters_delta / block->millimeters;
+    block->millimeters = SQRT(millimeters_delta);
+    //block->millimeters += millimeters_delta / block->millimeters;
 }
 
 int32_t Backlash::get_applied_steps(const AxisEnum axis) {
