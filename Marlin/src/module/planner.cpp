@@ -1877,8 +1877,6 @@ bool Planner::_populate_block(
   , feedRate_t fr_mm_s, const uint8_t extruder, const PlannerHints &hints
 ) {
 
-  xyze_long_t dist = target - position; //schmttc
-
   int32_t LOGICAL_AXIS_LIST(
     de = target.e - position.e,
     da = target.a - position.a,
@@ -2085,6 +2083,8 @@ bool Planner::_populate_block(
     #endif
   } steps_dist_mm;
 
+    bool backlash_changed = false;
+recalc_after_backlash:
   #if ANY(CORE_IS_XY, MARKFORGED_XY, MARKFORGED_YX)
     steps_dist_mm.head.x = da * mm_per_step[A_AXIS];
     steps_dist_mm.head.y = db * mm_per_step[B_AXIS];
@@ -2232,7 +2232,16 @@ bool Planner::_populate_block(
      * A correction function is permitted to add steps to an axis, it
      * should *never* remove steps!
      */
-    TERN_(BACKLASH_COMPENSATION, backlash.add_correction_steps(da, db, dc, dm, block,dist)); //schmttc
+    if(!backlash_changed) {
+        TERN_(BACKLASH_COMPENSATION, backlash_changed = backlash.add_correction_steps(da, db, dc, dm, block)); //schmttc
+
+        if(backlash_changed) {
+            da = (da < 0) ? -block->steps.a : block->steps.a;
+            db = (db < 0) ? -block->steps.b : block->steps.b;
+            dc = (dc < 0) ? -block->steps.c : block->steps.c;
+            goto recalc_after_backlash;
+        }
+    }
   }
 
   TERN_(HAS_EXTRUDERS, block->steps.e = esteps);

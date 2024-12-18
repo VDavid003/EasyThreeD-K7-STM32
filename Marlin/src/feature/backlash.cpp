@@ -63,7 +63,7 @@ Backlash backlash;
  * spread over multiple segments, smoothing out artifacts even more.
  */
 
-void Backlash::add_correction_steps(const int32_t &da, const int32_t &db, const int32_t &dc, const axis_bits_t dm, block_t * const block,const xyze_long_t &dist) {
+bool Backlash::add_correction_steps(const int32_t &da, const int32_t &db, const int32_t &dc, const axis_bits_t dm, block_t * const block) {
   axis_bits_t changed_dir = last_direction_bits ^ dm;
   // Ignore direction change unless steps are taken in that direction
   #if DISABLED(CORE_BACKLASH) || EITHER(MARKFORGED_XY, MARKFORGED_YX)
@@ -85,7 +85,7 @@ void Backlash::add_correction_steps(const int32_t &da, const int32_t &db, const 
   #endif
   last_direction_bits ^= changed_dir;
 
-  if (!correction && !residual_error) return;
+  if (!correction && !residual_error) return false;
 
   #ifdef BACKLASH_SMOOTHING_MM
     // The segment proportion is a value greater than 0.0 indicating how much residual_error
@@ -98,7 +98,6 @@ void Backlash::add_correction_steps(const int32_t &da, const int32_t &db, const 
   const float f_corr = float(correction) / all_on;
 
   bool changed = false;
-  float millimeters_delta = 0.0f;
   
   LOOP_NUM_AXES(axis) {
     if (distance_mm[axis]) {
@@ -127,11 +126,9 @@ void Backlash::add_correction_steps(const int32_t &da, const int32_t &db, const 
         error_correction = _MIN(error_correction, 0);
       
       // This correction reduces the residual error and adds block steps
-      millimeters_delta += sq((dist[axis] + error_correction) * planner.mm_per_step[axis]);
       if (error_correction) {
         changed = true;
         block->steps[axis] += ABS(error_correction);
-        //millimeters_delta += dist[axis] * error_correction * sq(planner.mm_per_step[axis]);
         #if ENABLED(CORE_BACKLASH)
           switch (axis) {
             case CORE_AXIS_1:
@@ -154,10 +151,7 @@ void Backlash::add_correction_steps(const int32_t &da, const int32_t &db, const 
     }
   }
 
-  // if backlash correction steps were added, modify block->millimeters with a linear approximation
-  if (changed)
-    block->millimeters = SQRT(millimeters_delta);
-    //block->millimeters += millimeters_delta / block->millimeters;
+  return changed;
 }
 
 int32_t Backlash::get_applied_steps(const AxisEnum axis) {
